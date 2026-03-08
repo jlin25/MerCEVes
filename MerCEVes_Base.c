@@ -6,6 +6,7 @@
 #include "pico/stdlib.h"
 #include "pico/multicore.h"
 #include "stepper.h"
+#include <math.h>
 
 #define ADC_PIN 26
 #define STEP_PIN 2
@@ -23,6 +24,9 @@
 #define RPM_PIN_L 27
 #define RPM_PIN_R 28
 
+//spi
+#define SPI_PORT spi0;
+
 const int steps_per_rev = 1600;
 const int margin_of_error = 20;
 
@@ -30,21 +34,23 @@ const int min_step_angle = 600;
 const int max_step_angle = 1000;
 
 volatile int current_step_angle;
-volatile int pulse_count = 0;
+volatile int pulse_count_L = 0;
+volatile int pulse_count_R = 0;
 
 const int magnets_per_wheel = 68;
 const int radius = .86;
 
 void rpm_interrupt_L(uint gpio, uint32_t events) {
-    pulse_count++;
+    pulse_count_L++;
 }
 void rpm_interrupt_R(uint gpio, uint32_t events) {
-    pulse_count++;
+    pulse_count_R++;
 }
 
 static inline int pollADC() {
     return floorf((adc_read() * steps_per_rev) / 4095.0f);
 }
+//sending back hall sensor from the left and hall sensor from the right and the checksum
 
 void core1_entry() {
     while (true) {
@@ -106,9 +112,23 @@ int main() {
 
     while (true) {
         sleep_ms(100);
-        double rpm = (pulse_count * 2 * 2 * 3.141592) / magnets_per_wheel; // Convert to RPM
-        printf("RPM (rad/s): %f\n", rpm);
-        pulse_count = 0; // Reset pulse count for the next interval
+        double rpm_L = (pulse_count_L* 2 * 2 * 3.141592) / magnets_per_wheel; // Convert to RPM
+        printf("RPM (rad/s): %f\n", rpm_L);
+        pulse_count_L = 0; // Reset pulse count for the next interval
+
+        double rpm_R = (pulse_count_R* 2 * 2 * 3.141592) / magnets_per_wheel; // Convert to RPM
+        printf("RPM (rad/s): %f\n", rpm_R);
+        pulse_count_R = 0; // Reset pulse count for the next interval
+
+        // get data from spi
+        uint8_t rx_data[17] = {0};
+        // calculate checksum
+        uint8_t checksum = 0;
+        for (int i = 0; i < 16; i++) {
+            checksum ^= rx_data[i];
+        }
+        printf("Received checksum: %02X, Calculated checksum: %02X\n", rx_data[16], checksum);
+
     }
 
     

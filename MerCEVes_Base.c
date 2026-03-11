@@ -54,6 +54,7 @@ const int magnets_per_wheel = 68;
 const double radius = .86;
 
 void gpio_interrupt(uint gpio, uint32_t events) {
+    printf("interrupted!!!!");
     switch(gpio) {
         case RPM_PIN_L:
             if(events == GPIO_IRQ_EDGE_RISE) pulse_count_L++;
@@ -62,20 +63,27 @@ void gpio_interrupt(uint gpio, uint32_t events) {
             if(events == GPIO_IRQ_EDGE_RISE) pulse_count_R++;
             break;
         case SPI_CS:
+        printf("spi_cs triggered");
             if(events != GPIO_IRQ_EDGE_FALL) break;
             uint8_t buffer[18];
             buffer[0] = 0xBB;
             for(int i = 1; i < 9; i++) {
                 buffer[i] = (uint8_t)((uint64_t)(speed_L)>>(8 * (i-1))) & 0xFF;
+                printf("left wheel data recieved");
             }
             for(int i = 9; i < 17; i++) {
                 buffer[i] = (uint8_t)((uint64_t)(speed_R)>>(8 * (i-9))) & 0xFF;
+                printf("right wheel data recieved");
             }
             uint8_t checksum = 0;
             for(int i = 0; i < 17; i++) {
                 checksum ^= buffer[i];
             }
             buffer[17] = checksum;
+            for (int i = 0; i < 18; i++) {
+                printf("%02X ", buffer[i]);
+            }
+            printf("\n");
             uint8_t buffer_out[18];
             spi_write_read_blocking(spi0, buffer, buffer_out, 18);
             
@@ -94,13 +102,18 @@ void gpio_interrupt(uint gpio, uint32_t events) {
             }
             double speed_d = (double)speed;
             requested_speed = (int)round(speed_d);
+            printf("speed: %lf\n", speed_d);
+            printf("requested speed: %lf\n", requested_speed);
 
             uint64_t angle_int;
             for(int i = 9; i < 17; i++) {
                 angle_int |= buffer_out[i] << (8 * (i-9));
             }
+            printf("angle %llu\n", angle_int);
             double angle_d = (double)speed;
+            printf("angle %lf:", angle_d);
             requested_angle = (int)(1000 * ((angle_d + (M_PI/2))/(M_PI)));
+            printf("requested angle %lf:", requested_angle);
     }
 }
 
